@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <title>Snakes matrix 3.2</title>
+    
+    <style>
+        /* --- 1. CORE VARIABLES --- */
+        :root { 
+            --neon-main: #00FF41; 
+            --neon-dim: #004400;
+            --neon-bright: #e0ffe0;
+            --glass-bg: rgba(0, 15, 0, 0.70); 
+            --font-stack: 'Courier New', monospace;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: black;
+            color: var(--neon-main);
+            font-family: var(--font-stack);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        /* --- 2. BACKGROUND LAYERS --- */
+        canvas#matrix-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.8; pointer-events: none; }
+        .scanlines { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.15)); background-size: 100% 4px; z-index: 5; pointer-events: none; }
+        .vignette { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.9) 100%); z-index: 6; pointer-events: none; }
+
+        /* --- 3. GAME UI --- */
+        .game-wrapper { position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 550px; }
+
+        .hud-panel {
+            width: 95%; background: var(--glass-bg);
+            border: 1px solid var(--neon-main); border-bottom: none; border-radius: 8px 8px 0 0;
+            padding: 10px 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            font-size: 12px; font-weight: bold; letter-spacing: 1px;
+            box-shadow: 0 0 15px var(--neon-dim); backdrop-filter: blur(3px);
+        }
+        .stat-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #004400; }
+
+        canvas#gameCanvas {
+            background-color: rgba(0, 10, 0, 0.85); border: 2px solid var(--neon-main);
+            width: 95%; height: auto; aspect-ratio: 1/1; image-rendering: pixelated;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2); animation: screen-pulse 4s infinite alternate;
+        }
+
+        .panel { 
+            width: 95%; background: var(--glass-bg);
+            border: 1px solid var(--neon-main); border-top: none; border-radius: 0 0 8px 8px; padding: 10px;
+            display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; backdrop-filter: blur(3px);
+        }
+        
+        .settings-row {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0, 40, 0, 0.3); padding: 5px 10px; border-radius: 4px; border: 1px solid #003300;
+        }
+
+        .btn-ui {
+            background: rgba(0, 34, 0, 0.6); border: 1px solid var(--neon-main); 
+            color: var(--neon-main); padding: 8px 12px; cursor: pointer; border-radius: 4px;
+            font-family: inherit; font-size: 11px; font-weight: bold; text-transform: uppercase;
+        }
+        .btn-ui:active { background: var(--neon-main); color: black; box-shadow: 0 0 10px var(--neon-main); }
+        .btn-music { flex-grow: 1; margin-right: 10px; }
+
+        input[type=range] { -webkit-appearance: none; width: 40%; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #004400; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; background: var(--neon-main); margin-top: -6px; border-radius: 0; box-shadow: 0 0 8px var(--neon-main); transform: rotate(45deg); }
+
+        /* --- 4. NEON JOYPAD --- */
+        .joypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 250px; margin-top: 5px; }
+        .btn-ctrl {
+            width: 75px; height: 65px; background: rgba(0, 20, 0, 0.4); color: var(--neon-main);
+            border: 2px solid var(--neon-main); border-radius: 12px; font-size: 28px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative;
+            box-shadow: 0 0 5px var(--neon-main), 0 0 15px var(--neon-dim), inset 0 0 10px var(--neon-dim);
+            text-shadow: 0 0 5px var(--neon-main); animation: neon-breathe 2s infinite alternate;
+        }
+        .btn-ctrl.active, .btn-ctrl:active { 
+            background: var(--neon-main); color: black; border-color: #ffffff;
+            box-shadow: 0 0 40px var(--neon-main), inset 0 0 20px white;
+            transform: scale(0.94); animation: none;
+        }
+
+        /* --- 5. OVERLAY --- */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .title-glitch {
+            font-size: 3rem; font-weight: bold; text-align: center; margin-bottom: 30px;
+            color: var(--neon-main); text-shadow: 3px 3px 0 #002200; animation: glitch 2s infinite;
+        }
+        .btn-start {
+            padding: 20px 60px; border: 3px solid var(--neon-main); 
+            background: transparent; color: var(--neon-main); 
+            font-family: inherit; font-size: 20px; font-weight: bold; letter-spacing: 2px;
+            cursor: pointer; box-shadow: 0 0 20px var(--neon-dim);
+            transition: 0.2s; text-transform: uppercase;
+        }
+        .btn-start:active { background: var(--neon-main); color: black; box-shadow: 0 0 50px var(--neon-main); }
+        .author-box { margin-top: 40px; border: 1px solid var(--neon-dim); padding: 8px 20px; color: #008822; font-size: 12px; }
+
+        @keyframes neon-breathe { 0% { box-shadow: 0 0 5px var(--neon-main), inset 0 0 5px var(--neon-dim); border-color: #008822; } 100% { box-shadow: 0 0 20px var(--neon-main), inset 0 0 15px var(--neon-dim); border-color: var(--neon-bright); } }
+        @keyframes screen-pulse { from { box-shadow: 0 0 10px #003300; } to { box-shadow: 0 0 25px rgba(0,255,65,0.25); } }
+        @keyframes glitch { 0%{transform:translate(0)} 20%{transform:translate(-2px,2px)} 40%{transform:translate(-2px,-2px)} 60%{transform:translate(2px,2px)} 80%{transform:translate(2px,-2px)} 100%{transform:translate(0)} }
+    </style>
+</head>
+<body>
+
+    <canvas id="matrix-bg"></canvas>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+
+    <div id="overlay">
+        <div class="title-glitch">SNAKES<br>MATRIX 3.2</div>
+        
+        <div id="finalScoreDisplay" style="display:none; color:white; margin-bottom:20px;">
+            DATA COLLECTED: <span id="finalScoreVal" style="color:var(--neon-main)">0</span>
+        </div>
+        
+        <button class="btn-start" id="startBtn">START</button>
+        
+        <div class="author-box">Author->Arling ツ</div>
+    </div>
+
+    <div class="game-wrapper">
+        <div class="hud-panel">
+            <div class="stat-item"><span>DATA:</span> <span id="score">0</span></div>
+            <div class="stat-item"><span>HIGH:</span> <span id="highScore">0</span></div>
+            <div class="stat-item"><span>STATUS:</span> <span id="statusLabel">READY</span></div>
+            <div class="stat-item"><span>TIME:</span> <span id="timeEl">00:00</span></div>
+        </div>
+
+        <canvas id="gameCanvas" width="500" height="500"></canvas>
+
+        <div class="panel">
+            <div class="settings-row">
+                <button class="btn-ui btn-music" id="musicBtn" onclick="toggleMusicMode()">♫ TRACK: RHYTHM</button>
+                <button class="btn-ui" id="muteBtn" onclick="toggleMute()">🔊</button>
+                <button class="btn-ui" style="margin-left:5px" onclick="togglePause()" id="pauseBtn">⏸</button>
+            </div>
+            <div class="settings-row">
+                <span style="font-size:10px; color:#00aa22">SPEED</span>
+                <input type="range" id="speedSlider" min="1" max="10" value="4">
+                <span style="font-size:10px; color:#00aa22">+++</span>
+            </div>
+        </div>
+
+        <div class="joypad">
+            <div></div><div class="btn-ctrl" id="btnUp">▲</div><div></div>
+            <div class="btn-ctrl" id="btnLeft">◀</div><div class="btn-ctrl" id="btnDown">▼</div><div class="btn-ctrl" id="btnRight">▶</div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. AUDIO ENGINE ---
+        let audioCtx, masterGain, compressor;
+        let isAudioUnlocked = false;
+
+        function initAudio() {
+            if (isAudioUnlocked) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                masterGain = audioCtx.createGain(); masterGain.gain.value = 0.4;
+                compressor = audioCtx.createDynamicsCompressor();
+                compressor.threshold.value = -12; compressor.ratio.value = 12;
+                masterGain.connect(compressor); compressor.connect(audioCtx.destination);
+                
+                const buffer = audioCtx.createBuffer(1, 1, 22050);
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer; source.connect(audioCtx.destination); source.start(0);
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                isAudioUnlocked = true;
+            } catch (e) {}
+        }
+
+        let bgmInterval = null; let isMuted = false; let musicMode = 0;
+
+        function playTone(freq, type, dur, vol) {
+            if(!audioCtx || isMuted || audioCtx.state !== 'running') return;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+            osc.connect(gain); gain.connect(masterGain); osc.start(); osc.stop(audioCtx.currentTime + dur);
+        }
+
+        function playSfx(type) {
+            if(!isAudioUnlocked) return;
+            if(type === 'eat') { playTone(600, 'sine', 0.1, 0.2); setTimeout(()=> playTone(900, 'triangle', 0.15, 0.1), 50); }
+            else if(type === 'click') { playTone(250, 'square', 0.05, 0.05); }
+            else if(type === 'crash') { playTone(100, 'sawtooth', 0.5, 0.3); playTone(60, 'square', 0.4, 0.3); }
+        }
+
+        function startMusic() {
+            stopMusic();
+            if(isMuted || !isAudioUnlocked) return;
+            let beat = 0;
+            if(musicMode === 0) { 
+                bgmInterval = setInterval(() => {
+                    if(beat % 2 === 0) playTone(55, 'square', 0.2, 0.15); 
+                    const notes = [110, 130, 164, 196]; playTone(notes[beat % 4], 'triangle', 0.15, 0.08); beat++;
+                }, 250);
+            } else { 
+                bgmInterval = setInterval(() => {
+                    if(Math.random() > 0.4) playTone(200 + Math.random() * 500, 'sawtooth', 0.05, 0.04);
+                    if(beat % 4 === 0) playTone(50, 'square', 0.1, 0.1); beat++;
+                }, 120);
+            }
+        }
+
+        function stopMusic() { if(bgmInterval) clearInterval(bgmInterval); }
+        function toggleMusicMode() {
+            musicMode = (musicMode === 0) ? 1 : 0;
+            document.getElementById('musicBtn').innerText = musicMode === 0 ? "♫ TRACK: RHYTHM" : "♫ TRACK: CHAOS";
+            if(isGameRunning && !isPaused) startMusic();
+        }
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊";
+            if(isMuted) stopMusic(); else if(isGameRunning) startMusic();
+        }
+
+        // --- 2. GAME LOGIC ---
+        const cvs = document.getElementById("gameCanvas");
+        const ctx = cvs.getContext("2d");
+        let box = 20, gridSize = 25;
+
+        function resize() {
+            let s = Math.min(window.innerWidth * 0.95, 500);
+            s = Math.floor(s / gridSize) * gridSize;
+            cvs.width = s; cvs.height = s; box = s / gridSize;
+        }
+        window.addEventListener('resize', resize); resize();
+
+        let snake=[], food={}, score=0, d, loop, timeInt, startTime, totalTime=0, isPaused=false, isGameRunning=false;
+        let highScore = localStorage.getItem('snakeV5_High') || 0;
+        document.getElementById('highScore').innerText = highScore;
+
+        document.getElementById('startBtn').addEventListener('click', initGame);
+
+        function setupBtn(id, dir) {
+            const btn = document.getElementById(id);
+            const press = (e) => {
+                if(e.cancelable && e.type === 'touchstart') e.preventDefault();
+                btn.classList.add('active'); control(dir);
+            };
+            const release = () => { btn.classList.remove('active'); };
+            btn.addEventListener('touchstart', press, {passive: false});
+            btn.addEventListener('touchend', release);
+            btn.addEventListener('mousedown', press);
+            btn.addEventListener('mouseup', release);
+            btn.addEventListener('mouseleave', release);
+        }
+        setupBtn('btnUp', 'up'); setupBtn('btnDown', 'down');
+        setupBtn('btnLeft', 'left'); setupBtn('btnRight', 'right');
+
+        function initGame() {
+            initAudio(); 
+            resize();
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('finalScoreDisplay').style.display = 'none';
+            
+            snake = [{x: 10 * box, y: 10 * box}];
+            d = "right"; score = 0; totalTime = 0; isPaused = false; isGameRunning = true;
+            
+            document.getElementById('score').innerText = "0";
+            // STATUS UPDATE: "RUNNING"
+            document.getElementById('statusLabel').innerText = "RUNNING";
+            document.getElementById('statusLabel').style.color = "#00FF41";
+            
+            spawnFood(); startMusic();
+            startTime = Date.now(); clearInterval(timeInt); timeInt = setInterval(timerTick, 1000);
+            setSpeed();
+        }
+
+        function timerTick(){
+            if(!isPaused){
+                let e = Math.floor((Date.now()-startTime)/1000)+totalTime;
+                let m = Math.floor(e/60).toString().padStart(2,'0');
+                let s = (e%60).toString().padStart(2,'0');
+                document.getElementById('timeEl').innerText=`${m}:${s}`;
+            }
+        }
+
+        function setSpeed(){
+            clearInterval(loop);
+            let val = parseInt(document.getElementById('speedSlider').value);
+            let ms = 320 - ((val-1) * 28); 
+            loop = setInterval(draw, ms);
+        }
+        document.getElementById('speedSlider').addEventListener('input', ()=> { if(isGameRunning && !isPaused) setSpeed(); });
+
+        function spawnFood() {
+            food = { x: Math.floor(Math.random() * gridSize) * box, y: Math.floor(Math.random() * gridSize) * box };
+            for(let s of snake) if(s.x === food.x && s.y === food.y) spawnFood();
+        }
+
+        function control(dir) {
+            if(isPaused || !isGameRunning) return;
+            playSfx('click');
+            if(dir == 'left' && d != 'right') d = 'left';
+            else if(dir == 'up' && d != 'down') d = 'up';
+            else if(dir == 'right' && d != 'left') d = 'right';
+            else if(dir == 'down' && d != 'up') d = 'down';
+        }
+
+        document.addEventListener('keydown', e => {
+            let k = e.key.toLowerCase();
+            if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+            if(k === 'arrowleft' || k === 'a') control('left');
+            else if(k === 'arrowup' || k === 'w') control('up');
+            else if(k === 'arrowright' || k === 'd') control('right');
+            else if(k === 'arrowdown' || k === 's') control('down');
+            else if(k === ' ') { 
+                if(!isGameRunning && document.getElementById('overlay').style.display !== 'none') initGame(); 
+                else togglePause(); 
+            }
+        });
+
+        function togglePause() {
+            if(!isGameRunning) return;
+            isPaused = !isPaused;
+            if(isPaused) {
+                clearInterval(loop); clearInterval(timeInt); stopMusic();
+                totalTime += Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('statusLabel').innerText = "PAUSED";
+                document.getElementById('statusLabel').style.color = "yellow";
+                document.getElementById('pauseBtn').innerText = "▶";
+            } else {
+                startTime = Date.now(); setSpeed(); timeInt = setInterval(timerTick, 1000); startMusic();
+                // STATUS UPDATE: "RUNNING"
+                document.getElementById('statusLabel').innerText = "RUNNING";
+                document.getElementById('statusLabel').style.color = "#00FF41";
+                document.getElementById('pauseBtn').innerText = "⏸";
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = "rgba(0,15,0,0.85)"; ctx.fillRect(0, 0, cvs.width, cvs.height);
+
+            ctx.shadowBlur = 15; ctx.shadowColor = "#00FF41"; ctx.fillStyle = "#00FF41";
+            ctx.fillRect(food.x+2, food.y+2, box-4, box-4);
+            ctx.shadowBlur = 0;
+
+            for(let i = 0; i < snake.length; i++){
+                ctx.fillStyle = (i === 0) ? "#FFFFFF" : "#00FF41";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                ctx.strokeStyle = "#003300"; ctx.lineWidth = 1;
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            let sx = snake[0].x, sy = snake[0].y;
+            if(d == 'left') sx -= box; if(d == 'up') sy -= box;
+            if(d == 'right') sx += box; if(d == 'down') sy += box;
+
+            if(sx < 0 || sx >= cvs.width || sy < 0 || sy >= cvs.height || checkCol(sx, sy, snake)) {
+                gameOver(); return;
+            }
+
+            if(sx == food.x && sy == food.y) {
+                score++; playSfx('eat'); document.getElementById('score').innerText = score;
+                if(score > highScore) { highScore = score; localStorage.setItem('snakeV5_High', highScore); document.getElementById('highScore').innerText = highScore; }
+                spawnFood();
+            } else { snake.pop(); }
+            
+            snake.unshift({x: sx, y: sy});
+        }
+
+        function checkCol(x, y, arr) {
+            for(let i = 0; i < arr.length; i++) if(x == arr[i].x && y == arr[i].y) return true;
+            return false;
+        }
+
+        function gameOver() {
+            isGameRunning = false; clearInterval(loop); clearInterval(timeInt); stopMusic(); playSfx('crash');
+            document.getElementById('overlay').style.display = 'flex';
+            document.getElementById('finalScoreDisplay').style.display = 'block';
+            document.getElementById('finalScoreVal').innerText = score;
+            document.querySelector('.title-glitch').innerHTML = "SYSTEM<br>HALTED";
+        }
+
+        // --- 3. MATRIX RAIN ---
+        const mCv = document.getElementById("matrix-bg");
+        const mCx = mCv.getContext("2d");
+        let drops = [];
+
+        function initMatrix() {
+            mCv.width = window.innerWidth; mCv.height = window.innerHeight;
+            drops = Array(Math.ceil(mCv.width / 16)).fill(1);
+        }
+        window.addEventListener('resize', initMatrix); initMatrix();
+
+        setInterval(() => {
+            mCx.fillStyle = "rgba(0, 0, 0, 0.05)"; mCx.fillRect(0, 0, mCv.width, mCv.height);
+            mCx.fillStyle = "#00FF41"; mCx.font = "16px monospace";
+            for(let i = 0; i < drops.length; i++) {
+                let char = Math.random() > 0.5 ? 
+                    String.fromCharCode(0x30A0 + Math.random() * 96) : 
+                    String.fromCharCode(48 + Math.random() * 42);
+                
+                mCx.fillText(char, i * 16, drops[i] * 16);
+                if(drops[i] * 16 > mCv.height && Math.random() > 0.98) drops[i] = 0;
+                drops[i]++;
+            }
+        }, 50);
+    </script>
+</body>
+</html>
